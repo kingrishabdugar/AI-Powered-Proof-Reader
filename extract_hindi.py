@@ -11,17 +11,26 @@ def extract_unique_hindi_words(docx_path):
         doc = docx.Document(docx_path)
         text = ' '.join([para.text for para in doc.paragraphs])
         
-        # Extract words in Devanagari script
-        hindi_words = re.findall(r'[\u0900-\u097F]+', text)
+        # Extract potential Hindi words (Devanagari script)
+        potential_words = re.findall(r'[\u0900-\u097F]+', text)
         
-        # Filter only Hindi
+        # Clean each word: Remove trailing punctuation, digits, spaces, and special chars
+        cleaned_words = []
+        for word in potential_words:
+            # Strip trailing punctuation/digits (e.g., ।, ., 1, etc.)
+            cleaned = re.sub(r'[।\.?!,\d\s]+$', '', word.strip())
+            # Skip if empty or too short after cleaning
+            if cleaned and len(cleaned) > 1:
+                cleaned_words.append(cleaned)
+        
+        # Filter only Hindi words using langdetect
         unique_words = set()
-        for word in hindi_words:
+        for word in cleaned_words:
             try:
                 if detect(word) == 'hi':
                     unique_words.add(word)
             except:
-                pass
+                pass  # Skip if detection fails
         
         return list(unique_words)
     except Exception as e:
