@@ -95,12 +95,12 @@ if st.session_state.step == 1:
 # Step 2: Generate Suggestions
 if st.session_state.step == 2:
     dictionary = load_dictionary(st.session_state.dict_path)
-    # Fixed call: Matches the function signature
+    # Fixed call: Explicitly pass all arguments with keywords
     st.session_state.matches = find_closest_matches(
-        st.session_state.doubted, 
-        dictionary, 
-        st.session_state.embedding_choice, 
-        threshold=0.7, 
+        doubted_words=st.session_state.doubted,
+        dictionary_words=dictionary,
+        embedding_choice=st.session_state.embedding_choice,
+        threshold=0.7,
         use_gemini_review=st.session_state.use_gemini_review
     )
     
