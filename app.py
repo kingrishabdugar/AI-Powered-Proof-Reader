@@ -44,7 +44,7 @@ if st.session_state.step == 0:
     
     use_gemini_review = st.checkbox("Use Gemini Flash to Review Suggestions (for better accuracy)", value=False, help="Refines top-5 suggestions using Gemini-1.5-flash.")
     
-    if uploaded_docx:
+    if st.button("Start Processing") and uploaded_docx:  # Wait for button press
         with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_docx:
             tmp_docx.write(uploaded_docx.getvalue())
             docx_path = tmp_docx.name
@@ -58,7 +58,7 @@ if st.session_state.step == 0:
             dict_path = "Hindi_Dictionary.txt"
             if not os.path.exists(dict_path):
                 st.error("Default dictionary 'Hindi_Dictionary.txt' not found. Please upload one.")
-                st.stop()  # Halt execution gracefully (fixes SyntaxError)
+                st.stop()
         
         st.session_state.docx_path = docx_path
         st.session_state.original_name = uploaded_docx.name
@@ -95,7 +95,14 @@ if st.session_state.step == 1:
 # Step 2: Generate Suggestions
 if st.session_state.step == 2:
     dictionary = load_dictionary(st.session_state.dict_path)
-    st.session_state.matches = find_closest_matches(st.session_state.doubted, dictionary, st.session_state.embedding_choice, use_gemini_review=st.session_state.use_gemini_review)
+    # Fixed call: Matches the function signature
+    st.session_state.matches = find_closest_matches(
+        st.session_state.doubted, 
+        dictionary, 
+        st.session_state.embedding_choice, 
+        threshold=0.7, 
+        use_gemini_review=st.session_state.use_gemini_review
+    )
     
     if st.session_state.matches:
         st.success("Suggestions generated!")
