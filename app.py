@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 def cached_extract(docx_path):
     return extract_unique_hindi_words(docx_path)
 
-@st.cache_data  # Cache for optimization
+@st.cache_data
 def load_dictionary(dict_path):
     try:
         with open(dict_path, 'r', encoding='utf-8') as f:
@@ -39,32 +39,32 @@ if st.session_state.step == 0:
     uploaded_docx = st.file_uploader("Upload DOCX file", type="docx", help="File must contain Hindi text.")
     uploaded_dict = st.file_uploader("Upload Hindi Dictionary (TXT)", type="txt", help="One word per line. If none, defaults to Hindi_Dictionary.txt.")
     
-    # New: Embedding choice
     embedding_choice = st.selectbox("Choose Embedding Model", ["sentence_transformers (Recommended for Hindi)", "gemini"], index=0)
     embedding_choice = 'sentence_transformers' if embedding_choice.startswith("sentence") else 'gemini'
+    
+    use_gemini_review = st.checkbox("Use Gemini Flash to Review Suggestions (for better accuracy)", value=False, help="Refines top-5 suggestions using Gemini-1.5-flash.")
     
     if uploaded_docx:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_docx:
             tmp_docx.write(uploaded_docx.getvalue())
             docx_path = tmp_docx.name
         
-        # Handle dictionary (default if not uploaded)
         if uploaded_dict:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tmp_dict:
                 tmp_dict.write(uploaded_dict.getvalue())
                 dict_path = tmp_dict.name
             logger.info("Using uploaded dictionary.")
         else:
-            dict_path = "Hindi_Dictionary.txt"  # Default file in repo
+            dict_path = "Hindi_Dictionary.txt"
             if not os.path.exists(dict_path):
                 st.error("Default dictionary 'Hindi_Dictionary.txt' not found. Please upload one.")
-                return
-            logger.info("Using default dictionary.")
+                st.stop()  # Halt execution gracefully (fixes SyntaxError)
         
         st.session_state.docx_path = docx_path
         st.session_state.original_name = uploaded_docx.name
         st.session_state.dict_path = dict_path
         st.session_state.embedding_choice = embedding_choice
+        st.session_state.use_gemini_review = use_gemini_review
         st.session_state.step = 1
         st.rerun()
 
@@ -95,7 +95,7 @@ if st.session_state.step == 1:
 # Step 2: Generate Suggestions
 if st.session_state.step == 2:
     dictionary = load_dictionary(st.session_state.dict_path)
-    st.session_state.matches = find_closest_matches(st.session_state.doubted, dictionary, st.session_state.embedding_choice)
+    st.session_state.matches = find_closest_matches(st.session_state.doubted, dictionary, st.session_state.embedding_choice, use_gemini_review=st.session_state.use_gemini_review)
     
     if st.session_state.matches:
         st.success("Suggestions generated!")
@@ -113,7 +113,7 @@ if st.session_state.step == 3:
     approve_all = st.checkbox("Approve All Top Suggestions", help="Select to auto-approve the first suggestion for each.")
     
     for wrong, corrects in st.session_state.matches.items():
-        st.write(f"{wrong} ➡️ Possible corrections: {', '.join(corrects)}")
+        st.write(f"{wrong} → Possible corrections: {', '.join(corrects)}")
         if approve_all:
             selected = corrects[0]  # Auto-approve first
         else:
