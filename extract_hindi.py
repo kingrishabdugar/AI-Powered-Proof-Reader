@@ -12,13 +12,13 @@ def extract_unique_hindi_words(docx_path):
         text = ' '.join([para.text for para in doc.paragraphs])
         
         # Extract potential Hindi words (Devanagari script)
-        potential_words = re.findall(r'[\u0900-\u097F]+', text)
+        potential_words = re.findall(r'[\u0900-\u097F]+[\d०-९]*|[\d०-९]*[\u0900-\u097F]+', text)  # Capture words with possible digits
         
-        # Clean each word: Remove trailing punctuation, digits, spaces, and special chars
+        # Clean each word: Remove leading/trailing punctuation, digits (Hindi/English), spaces, special chars
         cleaned_words = []
         for word in potential_words:
-            # Strip trailing punctuation/digits (e.g., ।, ., 1, etc.)
-            cleaned = re.sub(r'[।\.?!,\d\s]+$', '', word.strip())
+            # Strip leading/trailing digits (0-9, ०-९), punctuation, etc.
+            cleaned = re.sub(r'^[\d०-९\s।\.?!,]+|[\d०-९\s।\.?!,]+$', '', word.strip())
             # Skip if empty or too short after cleaning
             if cleaned and len(cleaned) > 1:
                 cleaned_words.append(cleaned)
