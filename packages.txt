@@ -1,0 +1,3 @@
+build-essential
+swig
+libopenblas-dev  # Optional but recommended for faiss performance
