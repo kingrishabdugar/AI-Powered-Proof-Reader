@@ -1,10 +1,11 @@
 # requirements.txt for Hindi Spell Checker Streamlit App
 # These versions are compatible and tested for Streamlit Cloud deployment as of August 2025.
-# Install with: pip install -r requirements.txt
+# Install with: uv pip install -r requirements.txt
 streamlit
 python-docx
 google-generativeai
 sentence-transformers
 langdetect
 regex
-faiss-cpu==1.8.0  # Pinned for Python 3.12 wheel
+faiss-cpu==1.8.0
+numpy<2  # Pins to NumPy 1.x for faiss-cpu compatibility
