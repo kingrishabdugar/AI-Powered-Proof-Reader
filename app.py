@@ -113,7 +113,7 @@ if st.session_state.step == 3:
     approve_all = st.checkbox("Approve All Top Suggestions", help="Select to auto-approve the first suggestion for each.")
     
     for wrong, corrects in st.session_state.matches.items():
-        st.write(f"{wrong} → Possible corrections: {', '.join(corrects)}")
+        st.write(f"{wrong} ➡️ Possible corrections: {', '.join(corrects)}")
         if approve_all:
             selected = corrects[0]  # Auto-approve first
         else:
