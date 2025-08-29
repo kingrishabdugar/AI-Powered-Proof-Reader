@@ -10,7 +10,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def get_embeddings(words, embedding_choice='sentence_transformers', batch_size=20):  # Increased batch size for optimization
+def get_embeddings(words, embedding_choice='sentence_transformers', batch_size=20):
     try:
         if embedding_choice == 'gemini':
             logger.info("Using Gemini embeddings.")
@@ -37,11 +37,29 @@ def get_embeddings(words, embedding_choice='sentence_transformers', batch_size=2
     except Exception as e:
         logger.error(f"Embedding error: {str(e)}")
         st.error(f"Embedding failed: {str(e)}. Try the other option.")
-        return np.zeros((len(words), 384)).astype('float32')  # Fallback zero embeddings for robustness
+        return np.zeros((len(words), 384)).astype('float32')  # Fallback
 
-def find_closest_matches(doubted_words, dictionary_words, embedding_choice, threshold=0.7):
+def review_with_gemini_flash(doubted_word, suggestions):
+    try:
+        api_key = st.secrets["GEMINI_API_KEY"] or os.environ.get('GEMINI_API_KEY')
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY not found.")
+        
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-1.5-flash')  # Lightweight flash model
+        prompt = f"For the potentially misspelled Hindi word '{doubted_word}', review these suggestions: {', '.join(suggestions)}. Pick the top 3 best corrections or refine if needed. Respond with a list."
+        response = model.generate_content(prompt)
+        refined = response.text.strip().split(', ')[:3]  # Extract top 3
+        logger.info(f"Gemini reviewed '{doubted_word}': {refined}")
+        return refined if refined else suggestions[:3]
+    except Exception as e:
+        logger.error(f"Gemini review error: {str(e)}")
+        st.warning(f"Gemini review skipped for '{doubted_word}': {str(e)}")
+        return suggestions
+
+def find_closest_matches(doubted_words, dictionary_words, embedding_choice, threshold=0.7, use_gemini_review=False):
     if not dictionary_words or not doubted_words:
-        logger.warning("No dictionary or doubted words provided.")
+        logger.warning("No dictionary or doubted words.")
         st.warning("No words to match.")
         return {}
     
@@ -55,18 +73,17 @@ def find_closest_matches(doubted_words, dictionary_words, embedding_choice, thre
     index.add(dict_emb)
     
     faiss.normalize_L2(doubted_emb)
-    distances, indices = index.search(doubted_emb, 5)  # Top-5 matches
+    distances, indices = index.search(doubted_emb, 5)  # Top-5
     
     matches = {}
     for i, word in enumerate(doubted_words):
-        word_matches = []
-        for j in range(5):
-            if distances[i][j] >= threshold:
-                word_matches.append(dictionary_words[indices[i][j]])
+        word_matches = [dictionary_words[indices[i][j]] for j in range(5) if distances[i][j] >= threshold]
         if word_matches:
+            if use_gemini_review:
+                word_matches = review_with_gemini_flash(word, word_matches)
             matches[word] = word_matches
         else:
-            logger.info(f"No matches for '{word}' above threshold.")
+            logger.info(f"No matches for '{word}'.")
     
     logger.info(f"Found matches for {len(matches)} words.")
     return matches
