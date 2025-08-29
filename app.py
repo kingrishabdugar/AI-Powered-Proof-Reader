@@ -1,20 +1,28 @@
 import streamlit as st
 import tempfile
 import os
+import logging
 from extract_hindi import extract_unique_hindi_words
 from vector_search import find_closest_matches
 from docx_utils import replace_words_in_docx
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 @st.cache_data
 def cached_extract(docx_path):
     return extract_unique_hindi_words(docx_path)
 
-@st.cache_data
+@st.cache_data  # Cache for optimization
 def load_dictionary(dict_path):
     try:
         with open(dict_path, 'r', encoding='utf-8') as f:
-            return [line.strip() for line in f if line.strip()]
+            dict_list = [line.strip() for line in f if line.strip()]
+        logger.info(f"Loaded {len(dict_list)} words from dictionary.")
+        return dict_list
     except Exception as e:
+        logger.error(f"Dictionary load error: {str(e)}")
         st.error(f"Dictionary error: {str(e)}")
         return []
 
@@ -26,23 +34,37 @@ if "step" not in st.session_state:
     st.session_state.matches = {}
     st.session_state.doubted = []
 
-# Step 0: Upload
+# Step 0: Upload and Options
 if st.session_state.step == 0:
     uploaded_docx = st.file_uploader("Upload DOCX file", type="docx", help="File must contain Hindi text.")
-    uploaded_dict = st.file_uploader("Upload Hindi Dictionary (TXT)", type="txt", help="One word per line.")
+    uploaded_dict = st.file_uploader("Upload Hindi Dictionary (TXT)", type="txt", help="One word per line. If none, defaults to Hindi_Dictionary.txt.")
     
-    if uploaded_docx and uploaded_dict:
+    # New: Embedding choice
+    embedding_choice = st.selectbox("Choose Embedding Model", ["sentence_transformers (Recommended for Hindi)", "gemini"], index=0)
+    embedding_choice = 'sentence_transformers' if embedding_choice.startswith("sentence") else 'gemini'
+    
+    if uploaded_docx:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_docx:
             tmp_docx.write(uploaded_docx.getvalue())
             docx_path = tmp_docx.name
         
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tmp_dict:
-            tmp_dict.write(uploaded_dict.getvalue())
-            dict_path = tmp_dict.name
+        # Handle dictionary (default if not uploaded)
+        if uploaded_dict:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tmp_dict:
+                tmp_dict.write(uploaded_dict.getvalue())
+                dict_path = tmp_dict.name
+            logger.info("Using uploaded dictionary.")
+        else:
+            dict_path = "Hindi_Dictionary.txt"  # Default file in repo
+            if not os.path.exists(dict_path):
+                st.error("Default dictionary 'Hindi_Dictionary.txt' not found. Please upload one.")
+                return
+            logger.info("Using default dictionary.")
         
         st.session_state.docx_path = docx_path
         st.session_state.original_name = uploaded_docx.name
         st.session_state.dict_path = dict_path
+        st.session_state.embedding_choice = embedding_choice
         st.session_state.step = 1
         st.rerun()
 
@@ -50,7 +72,7 @@ if st.session_state.step == 0:
 if st.session_state.step == 1:
     dictionary = load_dictionary(st.session_state.dict_path)
     if not dictionary:
-        st.error("Dictionary is empty. Please upload a valid file.")
+        st.error("Dictionary is empty. Please upload a valid file or check default.")
         st.session_state.step = 0
         st.rerun()
     
@@ -73,14 +95,14 @@ if st.session_state.step == 1:
 # Step 2: Generate Suggestions
 if st.session_state.step == 2:
     dictionary = load_dictionary(st.session_state.dict_path)
-    st.session_state.matches = find_closest_matches(st.session_state.doubted, dictionary)
+    st.session_state.matches = find_closest_matches(st.session_state.doubted, dictionary, st.session_state.embedding_choice)
     
     if st.session_state.matches:
         st.success("Suggestions generated!")
         st.session_state.step = 3
         st.rerun()
     else:
-        st.info("No close matches found. Adjust threshold or dictionary?")
+        st.info("No close matches found. Adjust dictionary or try different embeddings?")
         if st.button("Back to Upload"):
             st.session_state.step = 0
             st.rerun()
@@ -88,15 +110,17 @@ if st.session_state.step == 2:
 # Step 3: Review and Approve
 if st.session_state.step == 3:
     st.subheader("Review Suggestions")
-    approve_all = st.checkbox("Approve All Suggestions", help="Select to auto-approve everything.")
+    approve_all = st.checkbox("Approve All Top Suggestions", help="Select to auto-approve the first suggestion for each.")
     
-    for wrong, correct in st.session_state.matches.items():
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write(f"{wrong} → {correct}")
-        with col2:
-            if approve_all or st.checkbox(f"Approve '{wrong}'?", key=wrong):
-                st.session_state.approved[wrong] = correct
+    for wrong, corrects in st.session_state.matches.items():
+        st.write(f"{wrong} → Possible corrections: {', '.join(corrects)}")
+        if approve_all:
+            selected = corrects[0]  # Auto-approve first
+        else:
+            selected = st.radio(f"Choose correction for '{wrong}' (or skip):", corrects + ["Skip"], index=len(corrects), key=wrong)
+            if selected == "Skip":
+                continue
+        st.session_state.approved[wrong] = selected
     
     if st.button("Apply Changes"):
         if st.session_state.approved:
