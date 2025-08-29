@@ -1,0 +1,11 @@
+# requirements.txt for Hindi Spell Checker Streamlit App
+# These versions are compatible and tested for Streamlit Cloud deployment as of August 2025.
+# Install with: pip install -r requirements.txt
+
+streamlit==1.37.1  # Stable version for interactive apps, compatible with Cloud
+python-docx==1.1.2  # Handles DOCX with Unicode support
+google-generativeai==0.7.2  # For Gemini API embeddings
+sentence-transformers==3.0.1  # Multilingual embeddings fallback
+faiss-cpu==1.8.0  # Efficient vector search
+langdetect==1.0.9  # Language detection for Hindi
+regex==2024.7.24  # Advanced regex for Unicode extraction
