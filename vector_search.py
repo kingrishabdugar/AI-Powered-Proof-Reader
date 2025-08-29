@@ -8,11 +8,18 @@ import streamlit as st
 def get_embeddings(words, use_gemini=True, batch_size=10):
     try:
         if use_gemini:
-            genai.configure(api_key=st.secrets.get("GEMINI_API_KEY", os.environ.get('GEMINI_API_KEY')))
+            try:
+                api_key = st.secrets["GEMINI_API_KEY"]
+            except KeyError:
+                api_key = os.environ.get('GEMINI_API_KEY')
+                if not api_key:
+                    raise ValueError("GEMINI_API_KEY not found in Streamlit secrets or environment variables.")
+            
+            genai.configure(api_key=api_key)
             embeddings = []
             for i in range(0, len(words), batch_size):
                 batch = words[i:i+batch_size]
-                result = genai.embed_content(model="models/embedding-001", content=batch, task_type="SEMANTIC_SIMILARITY")  # Latest free endpoint[9]
+                result = genai.embed_content(model="models/embedding-001", content=batch, task_type="SEMANTIC_SIMILARITY")
                 embeddings.extend([np.array(emb) for emb in result['embedding']])
             return np.array(embeddings).astype('float32')
         else:
